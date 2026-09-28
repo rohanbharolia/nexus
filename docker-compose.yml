@@ -1,0 +1,12 @@
+services:
+  nexus:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: file:./dev.db
+      AI_PROVIDER: deterministic-fallback
+    volumes:
+      - nexus-data:/app/data
+volumes:
+  nexus-data:
