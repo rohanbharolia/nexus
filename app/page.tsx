@@ -93,36 +93,27 @@ type OsintIncident = { id: string; src: string; dest: string; host: string; user
 function OsintTab({ incident }: { incident: OsintIncident }) {
   const [results, setResults] = React.useState<Record<string, Record<string, { status: "idle" | "loading" | "done"; verdict?: string; url?: string }>>>({});
 
-  // Build the IOC list from the incident
+  // Build the IOC list from the incident — IPs and domains/URLs only, no hostnames
   const iocs = [
     ...(incident.dest && incident.dest !== "—" ? [{ type: "IP", value: incident.dest, label: "Destination IP" }] : []),
-    ...(incident.src ? [{ type: "IP", value: incident.src, label: "Source IP" }] : []),
-    { type: "HOST", value: incident.host, label: "Hostname" },
+    ...(incident.src && !incident.src.startsWith("10.") && !incident.src.startsWith("192.168.") && !incident.src.startsWith("172.") ? [{ type: "IP", value: incident.src, label: "Source IP" }] : []),
   ];
 
-  // OSINT tools per IOC type
-  const ipTools = [
-    { name: "VirusTotal",    icon: "🛡️", urlFn: (v: string) => `https://www.virustotal.com/gui/ip-address/${v}`,          verdict: "Check IP reputation across 90+ engines" },
-    { name: "AbuseIPDB",     icon: "🚨", urlFn: (v: string) => `https://www.abuseipdb.com/check/${v}`,                    verdict: "Community-reported IP abuse score" },
-    { name: "Shodan",        icon: "🔍", urlFn: (v: string) => `https://www.shodan.io/host/${v}`,                         verdict: "Open ports, banners, and CVEs on IP" },
+  // OSINT tools for IP and URL indicators
+  const osintTools = [
+    { name: "VirusTotal",    icon: "🛡️", urlFn: (v: string) => `https://www.virustotal.com/gui/ip-address/${v}`,          verdict: "IP/URL reputation across 90+ AV engines" },
+    { name: "AbuseIPDB",     icon: "🚨", urlFn: (v: string) => `https://www.abuseipdb.com/check/${v}`,                    verdict: "Community-reported abuse confidence score" },
+    { name: "Shodan",        icon: "🔍", urlFn: (v: string) => `https://www.shodan.io/host/${v}`,                         verdict: "Open ports, services, and CVEs on the IP" },
     { name: "Censys",        icon: "🌐", urlFn: (v: string) => `https://search.censys.io/hosts/${v}`,                     verdict: "Internet-wide scan data for host" },
     { name: "GreyNoise",     icon: "📡", urlFn: (v: string) => `https://viz.greynoise.io/ip/${v}`,                        verdict: "Mass-scanner vs targeted actor classification" },
     { name: "Talos",         icon: "⚡", urlFn: (v: string) => `https://talosintelligence.com/reputation_center/lookup?search=${v}`, verdict: "Cisco Talos IP and domain reputation" },
-    { name: "MXToolbox",     icon: "📬", urlFn: (v: string) => `https://mxtoolbox.com/SuperTool.aspx?action=blacklist%3a${v}`, verdict: "Email blacklist and DNS reputation check" },
-    { name: "IPVoid",        icon: "🔎", urlFn: (v: string) => `https://www.ipvoid.com/ip-blacklist-check/`,              verdict: "Multi-blacklist IP reputation check" },
-    { name: "Pulsedive",     icon: "📊", urlFn: (v: string) => `https://pulsedive.com/indicator/?ioc=${v}`,               verdict: "Threat intelligence enrichment and risk scoring" },
+    { name: "MXToolbox",     icon: "📬", urlFn: (v: string) => `https://mxtoolbox.com/SuperTool.aspx?action=blacklist%3a${v}`, verdict: "Multi-blacklist reputation check" },
+    { name: "IPVoid",        icon: "🔎", urlFn: (v: string) => `https://www.ipvoid.com/ip-blacklist-check/`,              verdict: "Aggregated IP blacklist lookup" },
+    { name: "Pulsedive",     icon: "📊", urlFn: (v: string) => `https://pulsedive.com/indicator/?ioc=${v}`,               verdict: "Threat intelligence enrichment and risk score" },
     { name: "ThreatMiner",   icon: "⛏️", urlFn: (v: string) => `https://www.threatminer.org/host.php?q=${v}`,             verdict: "Passive DNS and threat intelligence pivoting" },
   ];
 
-  const hostTools = [
-    { name: "VirusTotal",    icon: "🛡️", urlFn: (v: string) => `https://www.virustotal.com/gui/domain/${v}`,             verdict: "Domain/hostname reputation across 90+ engines" },
-    { name: "Shodan",        icon: "🔍", urlFn: (v: string) => `https://www.shodan.io/search?query=${v}`,                verdict: "Open services and banners for hostname" },
-    { name: "Censys",        icon: "🌐", urlFn: (v: string) => `https://search.censys.io/search?resource=hosts&q=${v}`,  verdict: "Internet scan data for hostname" },
-    { name: "URLScan",       icon: "🖥️", urlFn: (v: string) => `https://urlscan.io/search/#page.domain:${v}`,            verdict: "Visual screenshot and content analysis" },
-    { name: "Pulsedive",     icon: "📊", urlFn: (v: string) => `https://pulsedive.com/indicator/?ioc=${v}`,              verdict: "Threat intelligence enrichment" },
-  ];
-
-  const getTools = (type: string) => type === "HOST" ? hostTools : ipTools;
+  const getTools = (_type: string) => osintTools;
 
   const openAll = (iocValue: string, type: string) => {
     getTools(type).forEach(tool => {
