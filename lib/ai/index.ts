@@ -1,3 +1,6 @@
 export * from "./types";
-export * from "./fallback";
-export * from "./providers";
+export { DeterministicAIProvider } from "./fallback";
+export { OpenAICompatibleProvider } from "./openai-provider";
+export { GeminiProvider } from "./gemini-provider";
+// Singleton provider + factory — always import aiProvider from here
+export { aiProvider, getAIProvider, type SupportedAIProvider } from "./providers";

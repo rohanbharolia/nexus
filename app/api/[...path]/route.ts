@@ -11,6 +11,7 @@ import { liveIntegrations } from "@/lib/integrations";
 import { incidentTemplates } from "@/lib/templates";
 import { getOperationalMetrics } from "@/lib/observability";
 import { getSessionFromHeaders } from "@/lib/security/auth";
+import { requirePermission, getSession } from "@/lib/security/middleware";
 import { geoLookup, formatGeoValue } from "@/lib/geo/lookup";
 
 const incidents = [
@@ -75,6 +76,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ pat
     return json({ targetMinutes: 30, cases, measuredCases: cases.length, caveat: "Calculated from persisted Nexus audit events; vendor-side time is not included." });
   }
   if (path === "session") return json(getSessionFromHeaders(request.headers));
+  if (path === "ai/status") return json({ provider: process.env.AI_PROVIDER ?? "deterministic-fallback", model: process.env.AI_MODEL ?? "n/a", configured: !!(process.env.AI_API_KEY), mode: process.env.AI_API_KEY ? "live" : "deterministic-fallback", supportedProviders: ["openai","gemini","openrouter","deepseek","groq","ollama","deterministic-fallback"] });
   if (path === "security/status") return json({ authMode: process.env.AUTH_MODE ?? "demo", sessionProvider: process.env.OIDC_ISSUER ? "oidc-configured" : "demo-session", tenantIsolation: true, destructiveActions: false, requiredProductionEnv: ["OIDC_ISSUER", "OIDC_CLIENT_ID", "OIDC_CLIENT_SECRET", "DATABASE_URL"] });
   if (path === "capabilities") return json({ persistence: { prisma: true, sqlite: true, uiReads: "prisma-backed-api", uiLocalPreferences: true }, adapters: { mock: true, live: liveIntegrations.map(adapter => ({ name: adapter.name, configured: adapter.configured, status: adapter.status })) }, ai: { interface: true, deterministicFallback: true, liveProviders: ["openai", "openrouter", "ollama", "gemini", "deepseek"].map(provider => ({ provider, configured: Boolean(process.env.AI_PROVIDER === provider && process.env.AI_API_KEY && process.env.AI_ENDPOINT), status: process.env.AI_PROVIDER === provider && process.env.AI_API_KEY && process.env.AI_ENDPOINT ? "configured-http-boundary" : "credentials-required" })) }, security: { authContracts: true, oauthContracts: true, destructiveAutomation: false }, analytics: { businessImpact: true, blastRadius: true, attackPath: true, similarity: true, threatHunting: true, socMetrics: true }, testing: { unit: true, api: true, e2e: true, accessibility: true, note: "Test files and CI workflow are present; browser execution requires Playwright browser installation." }, deployment: { docker: true, observability: false, backups: false } });
   if (path === "templates") return json(incidentTemplates);
@@ -137,7 +139,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ pa
   const path = (await context.params).path.join("/");
   let body: unknown;
   try { body = await request.json(); } catch { return json({ error: "Request body must be valid JSON" }, 400); }
+
+  // ── queries/generate, queries/run ──────────────────────────────────────────
   if (path === "queries/generate" || path === "queries/run") {
+    const { error } = requirePermission(request, "query:generate");
+    if (error) return error;
     const parsed = querySchema.safeParse(body); if (!parsed.success) return json({ error: "Invalid query parameters", details: parsed.error.flatten() }, 400);
     const inc = getIncident(parsed.data.incidentId) ?? incidents[0];
     const generated = generateDeterministicQuery({ ...parsed.data, host: inc.host, incidentKind: incidentKindFromName(inc.name, inc.rule) });
@@ -145,8 +151,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ pa
     if (path.endsWith("generate")) return json({ ...generated, persistence: "prisma-sqlite" });
     return json({ ...generated, status: "completed", resultCount: 4, results: timeline.slice(2, 6), synthetic: true, persistence: "prisma-sqlite" });
   }
-  if (path === "investigations") { const parsed = incidentSchema.safeParse(body); if (!parsed.success) return json({ error: "Invalid incident ID", details: parsed.error.flatten() }, 400); const investigation = await ensureInvestigation(parsed.data.incidentId); if (!investigation) return json({ error: "Incident not found" }, 404); await recordAudit({ actor: "api", action: "investigation.started", incidentId: parsed.data.incidentId }); return json({ incidentId: investigation.incidentId, investigationId: investigation.id, status: investigation.status, createdAt: investigation.startedAt, persistence: "prisma-sqlite", steps: investigation.steps }, 201); }
-  if (path === "evidence/collect") { const id = (body as { incidentId?: string })?.incidentId ?? "INC-1042"; const investigation = await ensureInvestigation(id); if (!investigation) return json({ error: "Incident not found" }, 404);
+  if (path === "investigations") {
+    const { error } = requirePermission(request, "investigation:write");
+    if (error) return error; const parsed = incidentSchema.safeParse(body); if (!parsed.success) return json({ error: "Invalid incident ID", details: parsed.error.flatten() }, 400); const investigation = await ensureInvestigation(parsed.data.incidentId); if (!investigation) return json({ error: "Incident not found" }, 404); await recordAudit({ actor: "api", action: "investigation.started", incidentId: parsed.data.incidentId }); return json({ incidentId: investigation.incidentId, investigationId: investigation.id, status: investigation.status, createdAt: investigation.startedAt, persistence: "prisma-sqlite", steps: investigation.steps }, 201); }
+  if (path === "evidence/collect") {
+    const { error } = requirePermission(request, "evidence:collect");
+    if (error) return error; const id = (body as { incidentId?: string })?.incidentId ?? "INC-1042"; const investigation = await ensureInvestigation(id); if (!investigation) return json({ error: "Incident not found" }, 404);
     // Enrich geo_location evidence from source/destination IPs if still null
     const geoEvidence = investigation.evidence.find(item => item.key === "geo_location");
     const srcEvidence = investigation.evidence.find(item => item.key === "source_ip" || item.key === "source_location");
@@ -164,6 +174,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ pa
     if (!updated) return json({ error: "Incident not found" }, 404);
     await recordAudit({ actor: "api", action: "evidence.collected", incidentId: id, metadata: { count: updated.evidence.filter(item => item.value).length } }); return json({ collected: updated.evidence.filter(item => item.value), missing: updated.evidence.filter(item => !item.value).map(item => item.label), provenanceIncluded: true, persistence: "prisma-sqlite", synthetic: true }); }
   if (path === "analysis/validate") {
+    const { error } = requirePermission(request, "analysis:write");
+    if (error) return error;
     const schema = z.object({ text: z.string().min(1).max(20000), incidentId: z.string().default("INC-1042") }); const parsed = schema.safeParse(body); if (!parsed.success) return json({ error: "Invalid analysis input", details: parsed.error.flatten() }, 400);
     const text = parsed.data.text; const issues = [] as { type: string; severity: string; message: string; source?: string; suggestedFix?: string }[];
     const host = text.match(/WIN-PC-\d+/i)?.[0]; if (host && host !== "WIN-PC-1042") issues.push({ type: "evidence_mismatch", severity: "critical", message: `Analyst hostname ${host} does not match collected evidence.`, source: "CrowdStrike Falcon · MOCK-FALCON-0171", suggestedFix: "WIN-PC-1042" });
@@ -178,9 +190,36 @@ export async function POST(request: NextRequest, context: { params: Promise<{ pa
     const investigation = await ensureInvestigation(parsed.data.incidentId); if (investigation) { const analysis = await db.analysis.upsert({ where: { investigationId: investigation.id }, update: { summary: text, technicalFindings: text, scope: "Under review", recommendedActions: "Review flagged issues" }, create: { id: `AN-${parsed.data.incidentId}`, investigationId: investigation.id, summary: text, technicalFindings: text, scope: "Under review", recommendedActions: "Review flagged issues" } }); await db.validationResult.deleteMany({ where: { analysisId: analysis.id } }); if (mergedIssues.length) await db.validationResult.createMany({ data: mergedIssues.map((issue, index) => ({ id: `${analysis.id}-${index}`, analysisId: analysis.id, type: issue.type, severity: issue.severity, message: issue.message, source: issue.source, suggestedFix: issue.suggestedFix })) }); await recordAudit({ actor: "api", action: "analysis.validated", incidentId: parsed.data.incidentId, metadata: { issueCount: mergedIssues.length } }); }
     return json({ incidentId: parsed.data.incidentId, issues: mergedIssues, passed: mergedIssues.length === 0, inputPreserved: true, persistence: "prisma-sqlite", synthetic: true });
   }
-  if (path === "analysis/proofread") { const schema = z.object({ text: z.string().min(1).max(20000) }); const parsed = schema.safeParse(body); if (!parsed.success) return json({ error: "Invalid analysis text", details: parsed.error.flatten() }, 400); const suggestions = [] as { from: string; to: string; reason: string }[]; if (/\bpowershell\b/.test(parsed.data.text)) suggestions.push({ from: "powershell", to: "PowerShell", reason: "Security product terminology" }); if (/malicious IP/i.test(parsed.data.text)) suggestions.push({ from: "malicious IP", to: "potentially malicious IP", reason: "Align conclusion strength with suspicious reputation evidence" }); return json({ suggestions, originalTextPreserved: parsed.data.text, autoApplied: false }); }
+  if (path === "analysis/draft") {
+    const { error } = requirePermission(request, "analysis:ai");
+    if (error) return error;
+    // AI-powered analysis draft generation from current evidence + timeline
+    const schema = z.object({ incidentId: z.string().default("INC-1042") });
+    const parsed = schema.safeParse(body);
+    if (!parsed.success) return json({ error: "Invalid request", details: parsed.error.flatten() }, 400);
+    const investigation = await ensureInvestigation(parsed.data.incidentId);
+    if (!investigation) return json({ error: "Incident not found" }, 404);
+    const draft = await aiProvider.generateAnalysis({
+      incident: investigation.incident as never,
+      evidence: investigation.evidence.filter(item => item.value),
+      timeline: investigation.timeline,
+    });
+    // Persist the AI draft to the analysis table
+    await db.analysis.upsert({
+      where: { investigationId: investigation.id },
+      update: draft,
+      create: { id: `AN-${parsed.data.incidentId}`, investigationId: investigation.id, ...draft },
+    });
+    await recordAudit({ actor: getSession(request).userId, action: "analysis.drafted", incidentId: parsed.data.incidentId, metadata: { provider: process.env.AI_PROVIDER ?? "deterministic-fallback" } });
+    return json({ ...draft, incidentId: parsed.data.incidentId, aiProvider: process.env.AI_PROVIDER ?? "deterministic-fallback", humanReviewRequired: true, persistence: "prisma-sqlite" });
+  }
+  if (path === "analysis/proofread") {
+    const { error } = requirePermission(request, "analysis:write");
+    if (error) return error; const schema = z.object({ text: z.string().min(1).max(20000) }); const parsed = schema.safeParse(body); if (!parsed.success) return json({ error: "Invalid analysis text", details: parsed.error.flatten() }, 400); const suggestions = [] as { from: string; to: string; reason: string }[]; if (/\bpowershell\b/.test(parsed.data.text)) suggestions.push({ from: "powershell", to: "PowerShell", reason: "Security product terminology" }); if (/malicious IP/i.test(parsed.data.text)) suggestions.push({ from: "malicious IP", to: "potentially malicious IP", reason: "Align conclusion strength with suspicious reputation evidence" }); return json({ suggestions, originalTextPreserved: parsed.data.text, autoApplied: false }); }
   if (path === "handoff") { const schema = z.object({ incidentId: z.string().default("INC-1042"), completedSteps: z.array(z.number().int()).default([0, 1, 2]), queriesExecuted: z.number().int().nonnegative().default(0) }); const parsed = schema.safeParse(body); if (!parsed.success) return json({ error: "Invalid handoff request", details: parsed.error.flatten() }, 400); const investigation = await ensureInvestigation(parsed.data.incidentId); if (!investigation) return json({ error: "Incident not found" }, 404); await recordAudit({ actor: "api", action: "handoff.generated", incidentId: parsed.data.incidentId }); return json({ incident: investigation.incident, status: investigation.status, completed: investigation.steps.filter(step => parsed.data.completedSteps.includes(step.index)).map(step => step.title), pending: investigation.steps.filter(step => !parsed.data.completedSteps.includes(step.index)).map(step => step.title), keyFindings: ["PowerShell execution observed", "Outbound network session observed", "Threat reputation is suspicious; not confirmed malicious"], missingEvidence: investigation.evidence.filter(item => !item.value).map(item => item.label), nextRecommendedAction: "Investigate destination IP across network and SIEM sources", queriesExecuted: parsed.data.queriesExecuted, evidenceCollected: investigation.evidence.filter(item => item.value).length, persistence: "prisma-sqlite", synthetic: true }); }
   if (path === "analysis/save") {
+    const { error } = requirePermission(request, "analysis:write");
+    if (error) return error;
     const schema = z.object({ incidentId: z.string().default("INC-1042"), summary: z.string().max(20000), technicalFindings: z.string().max(20000), scope: z.string().max(20000), recommendedActions: z.string().max(20000) });
     const parsed = schema.safeParse(body); if (!parsed.success) return json({ error: "Invalid analysis", details: parsed.error.flatten() }, 400);
     const investigation = await ensureInvestigation(parsed.data.incidentId); if (!investigation) return json({ error: "Incident not found" }, 404);
@@ -189,6 +228,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ pa
     await recordAudit({ actor: "analyst", action: "analysis.saved", incidentId: parsed.data.incidentId }); return json({ ...analysis, persistence: "prisma-sqlite" });
   }
   if (path === "environment/save") {
+    const { error } = requirePermission(request, "environment:admin");
+    if (error) return error;
     const schema = z.object({ tools: z.array(z.object({ id: z.string(), enabled: z.boolean() })) }); const parsed = schema.safeParse(body); if (!parsed.success) return json({ error: "Invalid environment", details: parsed.error.flatten() }, 400);
     const storedTools = await db.tool.findMany({ where: { clientId: "client-acme" } });
     await db.$transaction(parsed.data.tools.flatMap(tool => { const match = storedTools.find(candidate => candidate.id === tool.id || candidate.name.toLowerCase().replaceAll(" ", "") === tool.id.toLowerCase().replaceAll(" ", "")); return match ? [db.tool.update({ where: { id: match.id }, data: { enabled: tool.enabled } })] : []; }));
@@ -203,6 +244,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ pa
     return json({ provider: integration.name, status: integration.configured ? "configured-transport-pending" : "credentials-required", connectionAttempted: false, reason: "Nexus will not contact a vendor until server-side OAuth secrets and provider mappings are configured." });
   }
   if (path === "notes") {
+    const { error } = requirePermission(request, "investigation:write");
+    if (error) return error;
     const schema = z.object({ incidentId: z.string().optional(), investigationId: z.string().optional(), body: z.string().min(1).max(20000), authorId: z.string().default("demo-analyst") });
     const parsed = schema.safeParse(body); if (!parsed.success) return json({ error: "Invalid note", details: parsed.error.flatten() }, 400);
     const note = await db.analystNote.create({ data: { clientId: "client-acme", ...parsed.data } });
@@ -215,12 +258,16 @@ export async function POST(request: NextRequest, context: { params: Promise<{ pa
     await recordAudit({ actor: parsed.data.authorId, action: "detection.feedback", incidentId: parsed.data.incidentId, metadata: { disposition: parsed.data.disposition } }); return json(feedback, 201);
   }
   if (path === "templates/create") {
+    const { error } = requirePermission(request, "environment:admin");
+    if (error) return error;
     const schema = z.object({ id: z.string().min(2).regex(/^[a-z0-9_-]+$/), name: z.string().min(2), description: z.string().min(2), artifacts: z.array(z.string()).default([]), steps: z.array(z.string()).default([]), recommendedLogSources: z.array(z.string()).default([]), analysisTemplate: z.string().default("Observed evidence, interpretation, hypothesis, recommendation") });
     const parsed = schema.safeParse(body); if (!parsed.success) return json({ error: "Invalid template", details: parsed.error.flatten() }, 400);
     const template = await db.incidentTemplate.create({ data: { id: parsed.data.id, name: parsed.data.name, description: parsed.data.description, severities: JSON.stringify(["MEDIUM", "HIGH", "CRITICAL"]), artifacts: parsed.data.artifacts, steps: parsed.data.steps, queryTemplates: [], recommendedLogSources: parsed.data.recommendedLogSources, analysisTemplate: parsed.data.analysisTemplate } });
     await recordAudit({ actor: "admin", action: "template.created", metadata: { templateId: template.id } }); return json(template, 201);
   }
   if (path === "reports/approve") {
+    const { error } = requirePermission(request, "report:approve");
+    if (error) return error;
     const schema = z.object({ incidentId: z.string(), decision: z.enum(["APPROVED", "CHANGES_REQUESTED", "ESCALATED"]), comment: z.string().max(4000).optional(), reviewerId: z.string().default("demo-senior-analyst") });
     const parsed = schema.safeParse(body); if (!parsed.success) return json({ error: "Invalid report approval", details: parsed.error.flatten() }, 400);
     const investigation = await ensureInvestigation(parsed.data.incidentId); if (!investigation?.report) return json({ error: "Report not found" }, 404);
@@ -234,6 +281,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ pa
 export async function PATCH(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
   const path = (await context.params).path.join("/");
   if (!/^investigations\/[^/]+\/steps$/.test(path)) return json({ error: "Route not found" }, 404);
+  const { error: rbacErr } = requirePermission(request, "investigation:write");
+  if (rbacErr) return rbacErr;
   let body: unknown; try { body = await request.json(); } catch { return json({ error: "Request body must be valid JSON" }, 400); }
   const parsed = z.object({ stepIndex: z.number().int().min(0).max(steps.length - 1), complete: z.boolean() }).safeParse(body);
   if (!parsed.success) return json({ error: "Invalid step update", details: parsed.error.flatten() }, 400);
