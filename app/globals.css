@@ -32,3 +32,24 @@
 .ai-dot.live{background:#6db88a}
 .ai-dot.offline{background:#d0aa5a}
 .role-badge{font:7px 'DM Mono',monospace;padding:2px 5px;border-radius:2px;border:1px solid #3d5244;color:#8fba9c;background:#1e2e24;margin-left:6px}
+
+/* ── OSINT Tab ─────────────────────────────────────────────────────────────── */
+.osint-layout{display:grid;gap:14px}
+.osint-ioc-card{padding:16px}
+.osint-ioc-header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+.osint-ioc-meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.osint-type-badge{font:7px 'DM Mono',monospace;letter-spacing:.6px;padding:3px 7px;border-radius:3px;background:#1e3028;border:1px solid #3d6048;color:#8ecfa4}
+.osint-ioc-meta b{font:13px 'DM Mono',monospace;color:#d4dcd7}
+.osint-ioc-label{font-size:8px;color:#7a9080;border:1px solid #2d3a34;padding:2px 6px;border-radius:3px}
+.osint-tools-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px}
+.osint-tool-card{display:grid;gap:5px;padding:12px;background:#141c1a;border:1px solid #2b3734;border-radius:4px;text-decoration:none;color:var(--text);transition:border-color .15s,background .15s}
+.osint-tool-card:hover{border-color:#4a7a5e;background:#1a2822}
+.osint-tool-top{display:flex;align-items:center;gap:7px}
+.osint-tool-icon{font-size:15px;line-height:1}
+.osint-tool-top b{font-size:10px;font-weight:600;flex:1;color:#c8d4cb}
+.osint-external-arrow{font-size:11px;color:#5a8a6e;font-weight:700}
+.osint-tool-card p{font-size:8px;color:#7a9080;line-height:1.5;margin:0}
+.osint-tool-url{font-size:7px;color:#4a6a58;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.osint-note{padding:14px;display:grid;gap:6px}
+.osint-note b{font-size:9px;color:#d4b878}
+.osint-note p{font-size:8px;color:#8a9a8e;line-height:1.6;margin:0}
