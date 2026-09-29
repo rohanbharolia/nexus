@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { generateDeterministicQuery } from "@/lib/queries/engine";
+import { generateDeterministicQuery, incidentKindFromName } from "@/lib/queries/engine";
 import { validateAnalysis as validateAnalysisEngine } from "@/lib/validation/analysis";
 import type { Evidence as DomainEvidence } from "@/types/domain";
 import { db } from "@/lib/db";
@@ -11,6 +11,7 @@ import { liveIntegrations } from "@/lib/integrations";
 import { incidentTemplates } from "@/lib/templates";
 import { getOperationalMetrics } from "@/lib/observability";
 import { getSessionFromHeaders } from "@/lib/security/auth";
+import { geoLookup, formatGeoValue } from "@/lib/geo/lookup";
 
 const incidents = [
   { id: "INC-1042", rule: "PS-EXEC-001", name: "Suspicious PowerShell Execution", severity: "HIGH", status: "Investigating", host: "WIN-PC-1042", user: "john.smith", sourceIp: "10.10.4.21", destinationIp: "185.199.110.153", detectedAt: "2026-09-28T14:32:08Z" },
@@ -102,7 +103,21 @@ export async function GET(request: NextRequest, context: { params: Promise<{ pat
   if (path === "openapi") return json({ openapi: "3.1.0", info: { title: "Optiv Nexus Demo API", version: "1.0.0", description: "Synthetic, deterministic local demonstration API. No live security integrations." }, servers: [{ url: "/api" }], paths: { "/health": { get: { summary: "Health and execution mode" } }, "/incidents": { get: { summary: "List synthetic incidents" } }, "/incidents/{incidentId}": { get: { summary: "Get incident details" } }, "/investigations/{incidentId}": { get: { summary: "Get investigation state" } }, "/investigations/{incidentId}/steps": { patch: { summary: "Update a step", requestBody: { content: { "application/json": { schema: { type: "object", properties: { stepIndex: { type: "integer" }, complete: { type: "boolean" } }, required: ["stepIndex", "complete"] } } } } } }, "/queries/generate": { post: { summary: "Generate a parameterized query" } }, "/queries/run": { post: { summary: "Run a synthetic mock query" } }, "/evidence": { get: { summary: "List evidence with provenance" } }, "/evidence/collect": { post: { summary: "Collect deterministic mock evidence" } }, "/timeline": { get: { summary: "Get chronological synthetic events" } }, "/analysis/validate": { post: { summary: "Validate analyst text without rewriting it" } }, "/analysis/proofread": { post: { summary: "Return deterministic wording suggestions" } }, "/reports/{incidentId}": { get: { summary: "Generate a structured draft report" } }, "/handoff": { post: { summary: "Generate an investigation handoff" } } } });
   if (path === "incidents") { const q = (url.searchParams.get("q") ?? "").toLowerCase(); return json(incidents.filter(i => JSON.stringify(i).toLowerCase().includes(q))); }
   if (path.startsWith("incidents/")) { const item = getIncident(path.split("/")[1]); return item ? json({ ...item, client: "ACME Financial", synthetic: true, availableTools: ["Splunk", "CrowdStrike Falcon", "Microsoft Entra ID", "Palo Alto", "Google Threat Intelligence"] }) : json({ error: "Incident not found" }, 404); }
-  if (path.startsWith("investigations/")) { const id = path.split("/")[1]; const investigation = await ensureInvestigation(id); if (!investigation) return json({ error: "Incident not found" }, 404); const complete = investigation.steps.filter(step => step.complete).length; return json({ incident: investigation.incident, investigationId: investigation.id, persistence: "prisma-sqlite", steps: investigation.steps.map(step => ({ ...step, recommendedTools: JSON.parse(String(step.recommendedTools)), requiredArtifacts: JSON.parse(String(step.requiredArtifacts)) })), artifacts: investigation.evidence, timeline: investigation.timeline, queries: investigation.queries, progress: Math.round(complete / investigation.steps.length * 100), nextBestAction: await aiProvider.generateNextBestAction({ incident: investigation.incident as never, completedSteps: investigation.steps.filter(step => step.complete).map(step => step.title), missingArtifacts: investigation.evidence.filter(item => !item.value).map(item => item.label), availableTools: investigation.client.tools.filter(tool => tool.enabled).map(tool => tool.name) }) }); }
+  if (path.startsWith("investigations/") && !path.includes("/steps")) { const id = path.split("/")[1]; const investigation = await ensureInvestigation(id); if (!investigation) return json({ error: "Incident not found" }, 404);
+    // Auto-populate geo_location if still null
+    const geoEvidence = investigation.evidence.find(item => item.key === "geo_location");
+    const srcEv = investigation.evidence.find(item => item.key === "source_ip" || item.key === "source_location");
+    const dstEv = investigation.evidence.find(item => item.key === "destination_ip");
+    if (geoEvidence && !geoEvidence.value) {
+      const targetIp = (dstEv?.value && dstEv.value !== "—") ? dstEv.value : srcEv?.value;
+      if (targetIp) {
+        const geo = geoLookup(targetIp);
+        await db.evidence.update({ where: { id: geoEvidence.id }, data: { value: formatGeoValue(geo), rawReference: "Geo Intelligence (deterministic)", confidence: "MEDIUM", collectedAt: new Date() } });
+      }
+    }
+    const fresh = await ensureInvestigation(id);
+    if (!fresh) return json({ error: "Incident not found" }, 404);
+    const complete = fresh.steps.filter(step => step.complete).length; return json({ incident: fresh.incident, investigationId: fresh.id, persistence: "prisma-sqlite", steps: fresh.steps.map(step => ({ ...step, recommendedTools: JSON.parse(String(step.recommendedTools)), requiredArtifacts: JSON.parse(String(step.requiredArtifacts)) })), artifacts: fresh.evidence, timeline: fresh.timeline, queries: fresh.queries, progress: Math.round(complete / fresh.steps.length * 100), nextBestAction: await aiProvider.generateNextBestAction({ incident: fresh.incident as never, completedSteps: fresh.steps.filter(step => step.complete).map(step => step.title), missingArtifacts: fresh.evidence.filter(item => !item.value).map(item => item.label), availableTools: fresh.client.tools.filter(tool => tool.enabled).map(tool => tool.name), incidentKind: incidentKindFromName(fresh.incident.name, fresh.incident.rule) }) }); }
   if (path === "evidence") { const id = url.searchParams.get("incidentId") ?? "INC-1042"; const investigation = await ensureInvestigation(id); return investigation ? json(investigation.evidence) : json({ error: "Incident not found" }, 404); }
   if (path === "timeline") { const id = url.searchParams.get("incidentId") ?? "INC-1042"; const investigation = await ensureInvestigation(id); return investigation ? json(investigation.timeline.map(event => ({ ...event, timestamp: event.timestamp.toISOString(), synthetic: true }))) : json({ error: "Incident not found" }, 404); }
   if (path === "analysis") { const id = url.searchParams.get("incidentId") ?? "INC-1042"; const investigation = await ensureInvestigation(id); return investigation ? json(investigation.analysis ?? { summary: "", technicalFindings: "", scope: "", recommendedActions: "", validations: [] }) : json({ error: "Incident not found" }, 404); }
@@ -124,13 +139,30 @@ export async function POST(request: NextRequest, context: { params: Promise<{ pa
   try { body = await request.json(); } catch { return json({ error: "Request body must be valid JSON" }, 400); }
   if (path === "queries/generate" || path === "queries/run") {
     const parsed = querySchema.safeParse(body); if (!parsed.success) return json({ error: "Invalid query parameters", details: parsed.error.flatten() }, 400);
-    const generated = generateDeterministicQuery({ ...parsed.data, host: (getIncident(parsed.data.incidentId) ?? incidents[0]).host });
+    const inc = getIncident(parsed.data.incidentId) ?? incidents[0];
+    const generated = generateDeterministicQuery({ ...parsed.data, host: inc.host, incidentKind: incidentKindFromName(inc.name, inc.rule) });
     const investigation = await ensureInvestigation(parsed.data.incidentId); if (investigation) { await db.generatedQuery.create({ data: { id: generated.id, investigationId: investigation.id, platform: generated.platform, indicator: generated.indicator, timeRange: generated.timeRange, query: generated.query, purpose: generated.purpose, resultCount: path.endsWith("run") ? 4 : null, executedAt: path.endsWith("run") ? new Date() : null } }); await recordAudit({ actor: "api", action: path.endsWith("run") ? "query.executed" : "query.generated", incidentId: parsed.data.incidentId, tool: parsed.data.platform, metadata: { indicator: parsed.data.indicator } }); }
     if (path.endsWith("generate")) return json({ ...generated, persistence: "prisma-sqlite" });
     return json({ ...generated, status: "completed", resultCount: 4, results: timeline.slice(2, 6), synthetic: true, persistence: "prisma-sqlite" });
   }
   if (path === "investigations") { const parsed = incidentSchema.safeParse(body); if (!parsed.success) return json({ error: "Invalid incident ID", details: parsed.error.flatten() }, 400); const investigation = await ensureInvestigation(parsed.data.incidentId); if (!investigation) return json({ error: "Incident not found" }, 404); await recordAudit({ actor: "api", action: "investigation.started", incidentId: parsed.data.incidentId }); return json({ incidentId: investigation.incidentId, investigationId: investigation.id, status: investigation.status, createdAt: investigation.startedAt, persistence: "prisma-sqlite", steps: investigation.steps }, 201); }
-  if (path === "evidence/collect") { const id = (body as { incidentId?: string })?.incidentId ?? "INC-1042"; const investigation = await ensureInvestigation(id); if (!investigation) return json({ error: "Incident not found" }, 404); await recordAudit({ actor: "api", action: "evidence.collected", incidentId: id, metadata: { count: investigation.evidence.filter(item => item.value).length } }); return json({ collected: investigation.evidence.filter(item => item.value), missing: investigation.evidence.filter(item => !item.value).map(item => item.label), provenanceIncluded: true, persistence: "prisma-sqlite", synthetic: true }); }
+  if (path === "evidence/collect") { const id = (body as { incidentId?: string })?.incidentId ?? "INC-1042"; const investigation = await ensureInvestigation(id); if (!investigation) return json({ error: "Incident not found" }, 404);
+    // Enrich geo_location evidence from source/destination IPs if still null
+    const geoEvidence = investigation.evidence.find(item => item.key === "geo_location");
+    const srcEvidence = investigation.evidence.find(item => item.key === "source_ip" || item.key === "source_location");
+    const dstEvidence = investigation.evidence.find(item => item.key === "destination_ip");
+    if (geoEvidence && !geoEvidence.value) {
+      const targetIp = (dstEvidence?.value && dstEvidence.value !== "—") ? dstEvidence.value : srcEvidence?.value;
+      if (targetIp) {
+        const geo = geoLookup(targetIp);
+        const geoValue = formatGeoValue(geo);
+        await db.evidence.update({ where: { id: geoEvidence.id }, data: { value: geoValue, rawReference: "Geo Intelligence (deterministic)", confidence: "MEDIUM", collectedAt: new Date() } });
+      }
+    }
+    // Re-fetch after enrichment
+    const updated = await ensureInvestigation(id);
+    if (!updated) return json({ error: "Incident not found" }, 404);
+    await recordAudit({ actor: "api", action: "evidence.collected", incidentId: id, metadata: { count: updated.evidence.filter(item => item.value).length } }); return json({ collected: updated.evidence.filter(item => item.value), missing: updated.evidence.filter(item => !item.value).map(item => item.label), provenanceIncluded: true, persistence: "prisma-sqlite", synthetic: true }); }
   if (path === "analysis/validate") {
     const schema = z.object({ text: z.string().min(1).max(20000), incidentId: z.string().default("INC-1042") }); const parsed = schema.safeParse(body); if (!parsed.success) return json({ error: "Invalid analysis input", details: parsed.error.flatten() }, 400);
     const text = parsed.data.text; const issues = [] as { type: string; severity: string; message: string; source?: string; suggestedFix?: string }[];
