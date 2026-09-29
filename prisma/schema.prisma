@@ -1,0 +1,272 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum ToolCategory {
+  SIEM
+  EDR
+  IDENTITY
+  NETWORK
+  THREAT_INTEL
+  CLOUD
+  TICKETING
+}
+enum Severity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+enum IncidentStatus {
+  TRIAGE
+  INVESTIGATING
+  AWAITING_REVIEW
+  RESOLVED
+}
+enum Confidence {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model Client {
+  id String @id
+  name String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tools Tool[]
+  incidents Incident[]
+  investigations Investigation[]
+  auditEvents AuditEvent[]
+  analystNotes AnalystNote[]
+  detectionFeedback DetectionFeedback[]
+}
+model Tool {
+  id String @id
+  clientId String
+  name String
+  category ToolCategory
+  adapter String
+  enabled Boolean @default(true)
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  evidence Evidence[]
+  generatedQueries GeneratedQuery[]
+  @@index([clientId, category])
+}
+model IncidentTemplate {
+  id String @id
+  name String
+  description String
+  severities String
+  artifacts Json
+  steps Json
+  queryTemplates Json
+  recommendedLogSources Json
+  analysisTemplate String
+  incidents Incident[]
+}
+model Incident {
+  id String @id
+  clientId String
+  templateId String
+  rule String
+  name String
+  severity Severity
+  status IncidentStatus
+  host String
+  user String
+  sourceIp String
+  destinationIp String
+  detectedAt DateTime
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  template IncidentTemplate @relation(fields: [templateId], references: [id])
+  investigation Investigation?
+  @@index([clientId, status, severity])
+}
+model Investigation {
+  id String @id
+  incidentId String @unique
+  clientId String
+  status String @default("IN_PROGRESS")
+  startedAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  steps InvestigationStep[]
+  artifacts Artifact[]
+  evidence Evidence[]
+  queries GeneratedQuery[]
+  timeline TimelineEvent[]
+  analysis Analysis?
+  report Report?
+  replayEvents ReplayEvent[]
+}
+model InvestigationStep {
+  id String @id
+  investigationId String
+  index Int
+  title String
+  purpose String
+  recommendedTools Json
+  requiredArtifacts Json
+  complete Boolean @default(false)
+  investigation Investigation @relation(fields: [investigationId], references: [id], onDelete: Cascade)
+  @@unique([investigationId, index])
+}
+model Artifact {
+  id String @id
+  investigationId String
+  key String
+  label String
+  required Boolean @default(true)
+  status String @default("PENDING")
+  value String?
+  investigation Investigation @relation(fields: [investigationId], references: [id], onDelete: Cascade)
+  @@unique([investigationId, key])
+}
+model Evidence {
+  id String @id
+  investigationId String
+  toolId String?
+  key String
+  label String
+  value String?
+  sourceEventId String?
+  collectedAt DateTime?
+  confidence Confidence?
+  rawReference String?
+  investigation Investigation @relation(fields: [investigationId], references: [id], onDelete: Cascade)
+  tool Tool? @relation(fields: [toolId], references: [id])
+  @@index([investigationId, key])
+}
+model QueryTemplate {
+  id String @id
+  platform String
+  purpose String
+  template String
+  expectedEvidence Json
+  confidence Confidence
+  generatedQueries GeneratedQuery[]
+}
+model GeneratedQuery {
+  id String @id
+  investigationId String
+  toolId String?
+  templateId String?
+  platform String
+  indicator String
+  timeRange String
+  query String
+  purpose String
+  resultCount Int?
+  executedAt DateTime?
+  investigation Investigation @relation(fields: [investigationId], references: [id], onDelete: Cascade)
+  tool Tool? @relation(fields: [toolId], references: [id])
+  template QueryTemplate? @relation(fields: [templateId], references: [id])
+}
+model TimelineEvent {
+  id String @id
+  investigationId String
+  timestamp DateTime
+  source String
+  host String
+  user String
+  eventType String
+  description String
+  severity String
+  investigation Investigation @relation(fields: [investigationId], references: [id], onDelete: Cascade)
+  @@index([investigationId, timestamp])
+}
+model Analysis {
+  id String @id
+  investigationId String @unique
+  summary String
+  technicalFindings String
+  scope String
+  recommendedActions String
+  investigation Investigation @relation(fields: [investigationId], references: [id], onDelete: Cascade)
+  validations ValidationResult[]
+}
+model ValidationResult {
+  id String @id
+  analysisId String
+  type String
+  severity String
+  message String
+  source String?
+  suggestedFix String?
+  analysis Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+}
+model Report {
+  id String @id
+  investigationId String @unique
+  status String @default("DRAFT")
+  content Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  investigation Investigation @relation(fields: [investigationId], references: [id], onDelete: Cascade)
+  approvals ReportApproval[]
+}
+model ReportApproval {
+  id String @id @default(cuid())
+  reportId String
+  reviewerId String
+  decision String
+  comment String?
+  createdAt DateTime @default(now())
+  report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  @@index([reportId, createdAt])
+}
+model AuditEvent {
+  id String @id @default(cuid())
+  actor String
+  action String
+  incidentId String?
+  tool String?
+  metadata Json
+  createdAt DateTime @default(now())
+  client Client? @relation(fields: [clientId], references: [id])
+  clientId String?
+  @@index([incidentId, createdAt])
+}
+model ReplayEvent {
+  id String @id @default(cuid())
+  investigationId String
+  actor String
+  action String
+  tool String?
+  payload Json
+  createdAt DateTime @default(now())
+  investigation Investigation @relation(fields: [investigationId], references: [id], onDelete: Cascade)
+  @@index([investigationId, createdAt])
+}
+model AnalystNote {
+  id String @id @default(cuid())
+  clientId String
+  incidentId String?
+  investigationId String?
+  authorId String
+  body String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  @@index([incidentId, createdAt])
+  @@index([investigationId, createdAt])
+}
+model DetectionFeedback {
+  id String @id @default(cuid())
+  clientId String
+  incidentId String
+  rule String
+  disposition String
+  reason String?
+  authorId String
+  createdAt DateTime @default(now())
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  @@index([clientId, rule, disposition])
+}

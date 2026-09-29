@@ -1,0 +1,8 @@
+[
+  { "id": "INC-1042", "rule": "PS-EXEC-001", "name": "Suspicious PowerShell Execution", "severity": "HIGH", "status": "INVESTIGATING", "host": "WIN-PC-1042", "user": "john.smith", "sourceIp": "10.10.4.21", "destinationIp": "185.199.110.153", "detectedAt": "2026-09-28T14:32:08Z" },
+  { "id": "INC-1041", "rule": "ID-TRAVEL-004", "name": "Impossible Travel", "severity": "MEDIUM", "status": "TRIAGE", "host": "MAC-FIN-028", "user": "rachel.lee", "sourceIp": "34.120.8.15", "destinationIp": "91.198.174.192", "detectedAt": "2026-09-28T14:18:42Z" },
+  { "id": "INC-1040", "rule": "EDR-MAL-022", "name": "Malware Detection", "severity": "CRITICAL", "status": "INVESTIGATING", "host": "WIN-OPS-088", "user": "svc-backup", "sourceIp": "10.10.7.88", "destinationIp": "—", "detectedAt": "2026-09-28T13:56:19Z" },
+  { "id": "INC-1039", "rule": "AUTH-BF-012", "name": "Brute Force Authentication", "severity": "MEDIUM", "status": "TRIAGE", "host": "IDP-GW-01", "user": "multiple users", "sourceIp": "45.33.18.204", "destinationIp": "10.10.0.10", "detectedAt": "2026-09-28T13:41:02Z" },
+  { "id": "INC-1038", "rule": "NET-C2-008", "name": "Suspicious C2 Communication", "severity": "HIGH", "status": "INVESTIGATING", "host": "WIN-ENG-116", "user": "d.chen", "sourceIp": "10.10.8.116", "destinationIp": "91.219.236.44", "detectedAt": "2026-09-28T13:22:51Z" },
+  { "id": "INC-1037", "rule": "DLP-EXF-031", "name": "Potential Data Exfiltration", "severity": "HIGH", "status": "AWAITING_REVIEW", "host": "FS-FIN-02", "user": "a.patel", "sourceIp": "10.10.2.19", "destinationIp": "—", "detectedAt": "2026-09-28T12:58:37Z" }
+]

@@ -1,0 +1,8 @@
+import type { GeneratedQuery } from "@/types/domain";
+
+const range = (timeRange: string) => timeRange === "1 hour" ? "-1h" : timeRange === "7 days" ? "-7d" : "-24h";
+export function generateDeterministicQuery(input: { incidentId: string; platform: string; indicator: string; timeRange: string; host: string }): GeneratedQuery {
+  const r = range(input.timeRange);
+  const query = input.platform === "Splunk" ? `index=* (src_ip="${input.indicator}" OR dest_ip="${input.indicator}" OR host="${input.host}") earliest=${r} latest=now\n| sort _time` : input.platform === "CrowdStrike Falcon" ? `host.hostname:"${input.host}" AND (network.remote_address:"${input.indicator}" OR process.name:"powershell.exe")\n| sort timestamp desc` : input.platform === "Palo Alto" ? `(addr.src in ${input.indicator} or addr.dst in ${input.indicator})\n| sort receive_time desc` : input.platform === "Google SecOps" ? `metadata.event_type = "NETWORK_CONNECTION"\nAND (principal.ip = "${input.indicator}" OR target.ip = "${input.indicator}")` : `CommonSecurityLog\n| where TimeGenerated > ago(${r === "-1h" ? "1h" : r === "-7d" ? "7d" : "24h"})\n| where SourceIP == "${input.indicator}" or DestinationIP == "${input.indicator}"`;
+  return { id: `${input.platform.toLowerCase().replaceAll(" ", "-")}-${Date.now()}`, platform: input.platform, purpose: "Correlate the indicator with affected endpoint telemetry", template: "deterministic-v1.4", expectedEvidence: ["timestamp", "source/destination", "action", "endpoint"], confidence: "high", incidentId: input.incidentId, indicator: input.indicator, timeRange: input.timeRange, query };
+}

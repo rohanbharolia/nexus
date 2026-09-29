@@ -1,0 +1,12 @@
+{
+  "id": "client-acme",
+  "name": "ACME Financial",
+  "tools": [
+    { "id": "splunk", "name": "Splunk", "category": "SIEM", "adapter": "MockSplunkAdapter", "enabled": true },
+    { "id": "crowdstrike", "name": "CrowdStrike Falcon", "category": "EDR", "adapter": "MockCrowdStrikeAdapter", "enabled": true },
+    { "id": "entra", "name": "Microsoft Entra ID", "category": "IDENTITY", "adapter": "MockEntraAdapter", "enabled": true },
+    { "id": "paloalto", "name": "Palo Alto", "category": "NETWORK", "adapter": "MockPaloAltoAdapter", "enabled": true },
+    { "id": "gti", "name": "Google Threat Intelligence", "category": "THREAT_INTEL", "adapter": "MockThreatIntelAdapter", "enabled": true },
+    { "id": "servicenow", "name": "ServiceNow", "category": "TICKETING", "adapter": "MockTicketingAdapter", "enabled": true }
+  ]
+}
