@@ -53,3 +53,55 @@
 .osint-note{padding:14px;display:grid;gap:6px}
 .osint-note b{font-size:9px;color:#d4b878}
 .osint-note p{font-size:8px;color:#8a9a8e;line-height:1.6;margin:0}
+
+/* ── New Presentation Slides ───────────────────────────────────────────────── */
+.slide-new{display:flex;flex-direction:column;justify-content:center;padding:40px 48px;gap:0;height:100%}
+.ns-eyebrow{font:8px 'DM Mono',monospace;letter-spacing:1.5px;color:#5a8a6e;margin-bottom:10px}
+.ns-title-text{font-size:32px;font-weight:700;margin:0 0 20px;line-height:1.1;color:#d4dcd7}
+
+/* Title slide */
+.ns-title{display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:center;height:100%}
+.ns-hero{font-size:72px;font-weight:900;letter-spacing:-2px;line-height:1;margin:8px 0;color:#ffffff}
+.ns-tagline{font-size:16px;color:#8ecfa4;font-weight:600;margin:0 0 12px}
+.ns-sub{font-size:11px;color:#7a9080;line-height:1.7;margin:0;max-width:380px}
+.ns-title-right{display:flex;flex-direction:column;align-items:center;gap:24px}
+.ns-glyph{color:#2d5a40;opacity:.6}
+.ns-badge-row{display:flex;flex-wrap:wrap;gap:7px;justify-content:center}
+.ns-badge{font:7px 'DM Mono',monospace;letter-spacing:.6px;padding:4px 9px;border-radius:3px;border:1px solid #3d6048;color:#8ecfa4;background:#1a2e22}
+
+/* Identity slide */
+.ns-identity{height:100%;display:flex;flex-direction:column;justify-content:center}
+.ns-identity-grid{display:grid;grid-template-columns:1fr 1.4fr;gap:20px;margin-top:16px}
+.ns-id-card{background:#141c1a;border:1px solid #2d3e34;border-radius:6px;padding:24px;display:flex;flex-direction:column;gap:12px}
+.ns-id-name{font-size:40px;font-weight:900;letter-spacing:-1px;color:#ffffff;line-height:1}
+.ns-id-cat{font:9px 'DM Mono',monospace;letter-spacing:.8px;color:#5a8a6e;border:1px solid #2d4a38;padding:4px 8px;border-radius:3px;width:fit-content}
+.ns-id-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.ns-id-problem{background:#1a1200;border:1px solid #4a3800;border-radius:6px;padding:24px;display:flex;flex-direction:column;gap:10px}
+.ns-problem-label{font:7px 'DM Mono',monospace;letter-spacing:1px;color:#c09030}
+.ns-problem-text{font-size:14px;line-height:1.7;color:#d4b878;margin:0;font-weight:500}
+
+/* Impact slide */
+.ns-impact{height:100%;display:flex;flex-direction:column;justify-content:center}
+.ns-impact-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-top:16px}
+.ns-impact-card{background:#141c1a;border:1px solid #2d3e34;border-radius:6px;padding:20px 16px;display:flex;flex-direction:column;gap:6px;transition:border-color .15s}
+.ns-impact-card:hover{border-color:#4a7a5e}
+.ns-impact-stat{font-size:32px;font-weight:900;letter-spacing:-1px;color:#8ecfa4;line-height:1}
+.ns-impact-label{font-size:10px;font-weight:700;color:#c8d4cb;line-height:1.3}
+.ns-impact-detail{font-size:8px;color:#6a8a76;line-height:1.5;margin-top:4px}
+
+/* Next slide */
+.ns-next{height:100%;display:flex;flex-direction:column;justify-content:center}
+.ns-next-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:16px}
+.ns-next-card{background:#141c1a;border:1px solid #2d3e34;border-radius:6px;padding:20px 16px;display:flex;flex-direction:column;gap:8px;transition:border-color .15s}
+.ns-next-card:hover{border-color:#4a7a5e}
+.ns-next-icon{font-size:24px;line-height:1}
+.ns-next-card b{font-size:11px;font-weight:700;color:#c8d4cb}
+.ns-next-card p{font-size:8px;color:#6a8a76;line-height:1.55;margin:0}
+
+@media(max-width:768px){
+  .ns-title{grid-template-columns:1fr}.ns-title-right{display:none}
+  .ns-identity-grid{grid-template-columns:1fr}
+  .ns-impact-grid{grid-template-columns:repeat(2,1fr)}
+  .ns-next-grid{grid-template-columns:repeat(2,1fr)}
+  .ns-hero{font-size:48px}
+}

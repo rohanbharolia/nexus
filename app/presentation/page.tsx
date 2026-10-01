@@ -2,36 +2,234 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronLeft, ChevronRight, Expand, ExternalLink, FileText, Keyboard, Maximize, Minimize, Presentation, Shield, X } from "lucide-react";
+import { BookOpen, ChevronLeft, ChevronRight, FileText, Keyboard, Maximize, Minimize, Shield, X } from "lucide-react";
 
-type Slide = { eyebrow: string; title: string; subtitle?: string; points?: string[]; visual?: "flow" | "before-after" | "architecture" | "demo" | "trust" | "impact"; note: string; time: string };
-const slides: Slide[] = [
-  { eyebrow: "OPTIV NEXUS · HACKATHON PRESENTATION", title: "From security alert to evidence-backed investigation.", subtitle: "An environment-aware investigation workspace for security analysts.", points: ["Standardize.", "Investigate.", "Validate.", "Respond with human approval."], visual: "flow", note: "Hi, we’re presenting Optiv Nexus. Security teams already have SIEM, endpoint, identity, network, and threat-intelligence platforms. Nexus connects the work analysts do across them, turning a scattered investigation into a consistent, evidence-backed process.", time: "0:00–0:20" },
-  { eyebrow: "THE PROBLEM", title: "One alert. Too many disconnected tools.", subtitle: "Analysts repeatedly switch systems, copy indicators, write queries, assemble evidence, and produce reports by hand.", points: ["Context gets lost between tools", "Procedures vary by analyst", "Evidence gaps are easy to miss", "Copy/paste errors weaken conclusions"], visual: "before-after", note: "A security alert can require looking in several different tools. The analyst has to remember what to search, translate indicators into each tool’s query language, and bring the results back together. That manual process is slow and can introduce inconsistent conclusions. Nexus addresses the workflow around those tools; it does not replace them.", time: "0:20–0:45" },
-  { eyebrow: "THE SOLUTION", title: "Nexus orchestrates the investigation, not the security stack.", subtitle: "A reusable investigation layer adapts to the tools a client has configured.", visual: "flow", points: ["Alert → classify", "Generate SOP + platform queries", "Collect normalized evidence", "Correlate timeline", "Validate analysis → report"], note: "The central idea is environment awareness. If one client has Splunk and CrowdStrike, the workflow recommends those. Another client may have Sentinel and Defender. The incident playbook stays recognizable while the tool-specific steps adapt.", time: "0:45–1:05" },
-  { eyebrow: "HOW IT WORKS", title: "A deterministic workflow with evidence provenance.", subtitle: "Templates control the investigation. AI is optional assistance, not the source of truth.", visual: "architecture", points: ["Incident template defines steps and required artifacts", "Configured environment filters available sources", "Adapters normalize results into evidence records", "Prisma stores investigation state", "Validation compares analyst claims with collected evidence"], note: "The system begins with a template, not free-form AI. The adapter layer provides a stable contract for search, host, user, and network lookups. Evidence keeps its source, event reference, collection time, and confidence. A deterministic fallback keeps the demo useful without an AI key.", time: "1:05–1:30" },
-  { eyebrow: "LIVE DEMO · INCIDENT INC-1042", title: "Suspicious PowerShell execution.", subtitle: "Synthetic incident data for ACME Financial. No customer or production telemetry is used.", visual: "demo", points: ["Host: WIN-PC-1042", "User: john.smith", "Source: 10.10.4.21", "Destination: 185.199.110.153", "Observed process: cmd.exe → powershell.exe"], note: "We’ll use one incident to show the full workflow. This data is deliberately synthetic. The alert says suspicious PowerShell execution; that is not the same as proving the host is compromised. We’ll keep observed facts separate from hypotheses.", time: "1:30–1:45" },
-  { eyebrow: "LIVE DEMO · INVESTIGATE", title: "The analyst gets a guided next step.", subtitle: "Fourteen steps cover endpoint, identity, process, network, scope, and reporting.", points: ["Mark steps complete as evidence is reviewed", "Queries use deterministic platform templates", "Mock runs produce normalized synthetic results", "Progress persists in SQLite through Prisma"], visual: "demo", note: "Start or resume the investigation. Each step explains its purpose and points to a recommended source. Complete a step to show persistence. Then generate a Splunk or Palo Alto query from a template and run the mock search. The important point is repeatability: the same incident pattern gets a structured process.", time: "1:45–2:10" },
-  { eyebrow: "LIVE DEMO · EVIDENCE & TIMELINE", title: "Evidence is traceable. Relationships stay qualified.", subtitle: "The timeline connects normalized observations while distinguishing correlation from causation.", points: ["Every artifact has source and confidence", "Missing evidence stays visible", "Events can be inspected by source and timestamp", "Potential relationships are not presented as confirmed attack paths"], visual: "demo", note: "Open the Evidence Vault and show the destination IP provenance and the remaining missing artifacts. Then open the timeline and select an event. We label the chain as a potential sequence unless the source evidence establishes a confirmed relationship. That restraint is important in security reporting.", time: "2:10–2:30" },
-  { eyebrow: "LIVE DEMO · ANALYSIS QA", title: "Catch a mismatch before it becomes a report.", subtitle: "Nexus checks analyst wording against evidence but never silently overwrites it.", points: ["Draft says WIN-PC-1047", "Falcon evidence says WIN-PC-1042", "Threat intelligence says “suspicious”", "Analyst chooses whether to apply a suggestion"], visual: "trust", note: "Here is the deliberate copy/paste error. The analyst draft says WIN-PC-1047, while the evidence says WIN-PC-1042. Nexus flags that conflict and shows provenance. The analyst can use the evidence value, keep their value, or review later. It also recommends saying potentially malicious because the reputation result is suspicious, not conclusive.", time: "2:30–2:55" },
-  { eyebrow: "GOVERNANCE & OPERATIONS", title: "Human review is part of the workflow.", subtitle: "Recommendations and drafts are assistance. Response actions remain under analyst control.", points: ["Persisted analyst notes and detection feedback", "Audit trail and replay records", "Report approval decisions", "No automatic isolation, account disabling, or blocking"], visual: "trust", note: "Nexus can recommend a next action, generate a query, collect mock evidence, and draft a ticket or report. It does not isolate an endpoint or disable an account. Reports can be reviewed and approved, and analyst actions are recorded. This is the appropriate boundary for an investigation copilot demo.", time: "2:55–3:15" },
-  { eyebrow: "WHAT WE BUILT", title: "A working local-first investigation platform.", subtitle: "Built for a hackathon demo, with a path toward real integrations.", visual: "impact", points: ["Next.js + TypeScript UI and API", "Prisma + SQLite investigation persistence", "8 incident templates; PowerShell is the full vertical slice", "Mock adapters + deterministic query engine", "Docs, Operations Center, templates, approvals, tests, CI, Docker scaffold"], note: "The working implementation includes a Next.js application, Prisma with SQLite, persistent investigation state, notes, feedback, audit and replay records, deterministic query generation, analysis checks, and several operational pages. The PowerShell scenario is the fully instrumented end-to-end template; the other seven are structured templates, not equally complete workflows.", time: "3:15–3:40" },
-  { eyebrow: "HONEST STATUS", title: "Mocked today. Integration-ready by design.", subtitle: "We distinguish implemented behavior from production dependencies.", visual: "architecture", points: ["Working now: local workflow, SQLite persistence, mock adapters, deterministic QA", "Scaffolded: adapter contracts, provider boundary, auth permissions, Docker, CI", "Still needs tenant setup: vendor APIs, OAuth, SSO, real AI, PostgreSQL, monitoring, backups"], note: "We are transparent about scope. The vendor integrations are not live: the app uses synthetic adapter data. The provider and integration contracts define where real implementations plug in, but those require tenant endpoints, credentials, response mapping, and secret management. Production SSO, managed database, monitoring, and backups also depend on deployment choices.", time: "3:40–4:05" },
-  { eyebrow: "CLOSING", title: "Nexus connects the investigation between security tools.", subtitle: "From alert to evidence-backed investigation.", points: ["Standardize.", "Investigate.", "Validate.", "Respond with human approval."], visual: "flow", note: "Nexus does not replace the client’s security tools. It makes the investigation between those tools more consistent, traceable, and evidence-driven. Thank you. We’re happy to walk through the architecture, safety boundary, or integration plan.", time: "4:05–4:20" },
+// ─── 4 slides only ────────────────────────────────────────────────────────────
+
+const slides = [
+  // Slide 0 — Title
+  {
+    id: "title",
+    eyebrow: "HACKATHON 2026",
+    title: "NEXUS",
+    tagline: "AI-Powered SOC Investigation Platform",
+    sub: "From alert to evidence-backed report — in one unified workspace.",
+    note: "Nexus is a unified SOC investigation platform that eliminates tool-switching by bringing SIEM, EDR, identity, network, and threat-intel context into a single AI-assisted workflow.",
+  },
+  // Slide 1 — Identity card
+  {
+    id: "identity",
+    eyebrow: "WHAT IS IT",
+    title: "Platform Identity",
+    note: "Nexus sits in the Agentic SOC category. It is purpose-built for MSSPs and enterprise security teams who need consistency, auditability, and speed across every investigation.",
+    identity: {
+      name: "NEXUS",
+      problem: "Analysts waste 15+ min per incident switching between disconnected tools, copy-pasting indicators, and writing reports from scratch — introducing errors and losing context.",
+      category: "Agentic SOC Platform",
+      tags: ["Agentic SOC", "CTI Enrichment", "Threat Hunting", "Vulnerability Triage", "MSSP / Sales Tooling"],
+    },
+  },
+  // Slide 2 — Impact
+  {
+    id: "impact",
+    eyebrow: "WHY IT MATTERS",
+    title: "Built for Impact",
+    note: "Five capabilities that directly solve the analyst pain. Each one removes a specific friction point that slows down real investigations.",
+    impacts: [
+      { stat: "15 min+",  label: "Saved per incident",        detail: "Unified workspace eliminates tool-switching" },
+      { stat: "10×",      label: "Faster query generation",   detail: "Incident-type-specific queries for Splunk, Falcon, Google SecOps" },
+      { stat: "Zero",     label: "Copy-paste errors",         detail: "AI QA catches hostname, IP, and hash mismatches before the report ships" },
+      { stat: "AI",       label: "Analysis drafted in seconds", detail: "DeepSeek writes the investigation summary from collected evidence" },
+      { stat: "RBAC",     label: "Role-enforced workflow",    detail: "Analyst → Senior → Manager → Admin — every action permission-gated" },
+    ],
+  },
+  // Slide 3 — What's next
+  {
+    id: "next",
+    eyebrow: "WHAT'S NEXT",
+    title: "If We Had More Time",
+    note: "These are real features that belong in the product. Time and tooling constraints during the hackathon kept them out of this build.",
+    nexts: [
+      { icon: "🔌", title: "Live Integrations",      detail: "Real Splunk, Falcon, Sentinel, and Entra API calls — not mock adapters" },
+      { icon: "🤖", title: "Autonomous Agent Loop",  detail: "AI runs the investigation steps end-to-end, surfaces findings for analyst approval" },
+      { icon: "🗺️", title: "Attack Path Visualiser", detail: "Interactive graph of lateral movement across hosts, identities, and networks" },
+      { icon: "📡", title: "Live Threat Feeds",       detail: "Real-time IOC ingestion from MISP, OpenCTI, and commercial threat-intel providers" },
+      { icon: "📲", title: "Mobile Analyst App",      detail: "Approve reports and receive critical-severity alerts on the go" },
+      { icon: "🏢", title: "Multi-Tenant SaaS",       detail: "Isolated client environments with SSO, PostgreSQL, and full audit compliance" },
+    ],
+  },
 ];
 
-export default function PresentationPage(){
- const [index,setIndex]=useState(0),[showNotes,setShowNotes]=useState(false),[full,setFull]=useState(false);
- const slide=slides[index];
- useEffect(()=>{const handler=(event:KeyboardEvent)=>{if(event.key==="ArrowRight"||event.key===" "){event.preventDefault();setIndex(i=>Math.min(i+1,slides.length-1))}else if(event.key==="ArrowLeft"){setIndex(i=>Math.max(i-1,0))}else if(event.key==="Home"){setIndex(0)}else if(event.key==="End"){setIndex(slides.length-1)}else if(event.key.toLowerCase()==="n"){setShowNotes(v=>!v)}else if(event.key.toLowerCase()==="f"){setFull(v=>!v)}};window.addEventListener("keydown",handler);return()=>window.removeEventListener("keydown",handler)},[]);
- return <main className={`deck ${full?"deck-full":""}`}><header className="deck-top"><Link href="/" className="deck-brand"><span className="deck-brand-icon"><Shield size={17}/></span><span>OPTIV NEXUS<small>HACKATHON PRESENTATION</small></span></Link><div className="deck-top-actions"><button onClick={()=>setShowNotes(v=>!v)} title="Toggle speaker notes"><BookOpen size={15}/><span>Speaker notes</span></button><button onClick={()=>window.print()} title="Print or save as PDF"><FileText size={15}/><span>Print / PDF</span></button><button onClick={()=>setFull(v=>!v)} title="Toggle full presentation layout">{full?<Minimize size={15}/>:<Maximize size={15}/>}<span>{full?"Exit focus":"Focus mode"}</span></button><Link href="/docs" title="Presenter and product guide"><ExternalLink size={15}/><span>Product guide</span></Link></div></header><div className="deck-main"><div className="deck-side"><span className="deck-index">{String(index+1).padStart(2,"0")}</span><span className="deck-divider"/><span className="deck-total">{String(slides.length).padStart(2,"0")}</span><div className="deck-progress"><i style={{height:`${(index+1)/slides.length*100}%`}}/></div></div><section className="slide" key={index}><div className="slide-copy"><div className="slide-eyebrow">{slide.eyebrow}</div><h1>{slide.title}</h1>{slide.subtitle&&<p className="slide-subtitle">{slide.subtitle}</p>}{slide.points&&<ul>{slide.points.map((point,i)=><li key={point}><span>{String(i+1).padStart(2,"0")}</span>{point}</li>)}</ul>}<div className="slide-bottom"><span>{slide.time}</span><span>OPTIV NEXUS · ENVIRONMENT-AWARE INVESTIGATION</span></div></div><SlideVisual slide={slide}/></section></div>{showNotes&&<aside className="speaker-notes"><div><BookOpen size={15}/> PRESENTER NOTES <button onClick={()=>setShowNotes(false)} aria-label="Close speaker notes"><X size={15}/></button></div><p>{slide.note}</p><small>Suggested timing: {slide.time}</small></aside>}<footer className="deck-controls"><div className="deck-chapter">{slide.eyebrow.split(" · ")[0]}<span> / </span>{slide.time}</div><div className="deck-controls-center"><button disabled={index===0} onClick={()=>setIndex(i=>Math.max(0,i-1))} aria-label="Previous slide"><ChevronLeft size={19}/></button><span>{index+1} <i>/</i> {slides.length}</span><button disabled={index===slides.length-1} onClick={()=>setIndex(i=>Math.min(slides.length-1,i+1))} aria-label="Next slide"><ChevronRight size={19}/></button></div><div className="deck-shortcuts"><Keyboard size={14}/> ← → navigate · N notes · F focus</div></footer></main>
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
+export default function PresentationPage() {
+  const [index, setIndex] = useState(0);
+  const [showNotes, setShowNotes] = useState(false);
+  const [full, setFull] = useState(false);
+  const slide = slides[index];
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "ArrowRight" || e.key === " ") { e.preventDefault(); setIndex(i => Math.min(i + 1, slides.length - 1)); }
+      else if (e.key === "ArrowLeft") setIndex(i => Math.max(i - 1, 0));
+      else if (e.key.toLowerCase() === "n") setShowNotes(v => !v);
+      else if (e.key.toLowerCase() === "f") setFull(v => !v);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
+  return (
+    <main className={`deck ${full ? "deck-full" : ""}`}>
+
+      {/* Top bar */}
+      <header className="deck-top">
+        <Link href="/" className="deck-brand">
+          <span className="deck-brand-icon"><Shield size={17} /></span>
+          <span>NEXUS <small>HACKATHON PRESENTATION</small></span>
+        </Link>
+        <div className="deck-top-actions">
+          <button onClick={() => setShowNotes(v => !v)} title="Toggle speaker notes"><BookOpen size={15} /><span>Notes</span></button>
+          <button onClick={() => window.print()} title="Print / PDF"><FileText size={15} /><span>Print</span></button>
+          <button onClick={() => setFull(v => !v)}>{full ? <Minimize size={15} /> : <Maximize size={15} />}<span>{full ? "Exit" : "Focus"}</span></button>
+        </div>
+      </header>
+
+      {/* Slide area */}
+      <div className="deck-main">
+        <div className="deck-side">
+          <span className="deck-index">{String(index + 1).padStart(2, "0")}</span>
+          <span className="deck-divider" />
+          <span className="deck-total">{String(slides.length).padStart(2, "0")}</span>
+          <div className="deck-progress"><i style={{ height: `${(index + 1) / slides.length * 100}%` }} /></div>
+        </div>
+
+        <section className="slide slide-new" key={index}>
+          {slide.id === "title"    && <TitleSlide s={slide as TitleSlideData} />}
+          {slide.id === "identity" && <IdentitySlide s={slide as IdentitySlideData} />}
+          {slide.id === "impact"   && <ImpactSlide s={slide as ImpactSlideData} />}
+          {slide.id === "next"     && <NextSlide s={slide as NextSlideData} />}
+        </section>
+      </div>
+
+      {/* Speaker notes */}
+      {showNotes && (
+        <aside className="speaker-notes">
+          <div><BookOpen size={15} /> PRESENTER NOTES <button onClick={() => setShowNotes(false)} aria-label="Close"><X size={15} /></button></div>
+          <p>{slide.note}</p>
+        </aside>
+      )}
+
+      {/* Controls */}
+      <footer className="deck-controls">
+        <div className="deck-chapter">{slide.eyebrow}</div>
+        <div className="deck-controls-center">
+          <button disabled={index === 0} onClick={() => setIndex(i => Math.max(0, i - 1))} aria-label="Previous"><ChevronLeft size={19} /></button>
+          <span>{index + 1} <i>/</i> {slides.length}</span>
+          <button disabled={index === slides.length - 1} onClick={() => setIndex(i => Math.min(slides.length - 1, i + 1))} aria-label="Next"><ChevronRight size={19} /></button>
+        </div>
+        <div className="deck-shortcuts"><Keyboard size={14} /> ← → navigate · N notes · F focus</div>
+      </footer>
+    </main>
+  );
 }
 
-function SlideVisual({slide}:{slide:Slide}){
- if(slide.visual==="before-after")return <div className="visual before-after"><div><small>TODAY</small><strong>Alert</strong><i/>SIEM<i/>copy indicators<i/>EDR<i/>rewrite query<i/>identity<i/>write report</div><ArrowRight className="visual-arrow"/><div className="after"><small>WITH NEXUS</small><strong>One investigation</strong><span>Environment-aware SOP</span><span>Platform queries</span><span>Evidence with provenance</span><span>Validated report</span></div></div>;
- if(slide.visual==="architecture")return <div className="visual architecture"><div className="arch-row source-row"><span>SIEM</span><span>EDR</span><span>IDENTITY</span><span>NETWORK</span></div><div className="arch-lines"><i/><i/><i/><i/></div><div className="arch-core"><Shield size={24}/><b>NEXUS INVESTIGATION CORE</b><small>Templates · adapters · normalized evidence</small></div><div className="arch-lines reverse"><i/><i/><i/></div><div className="arch-row output-row"><span>SOP</span><span>QUERY</span><span>QA + REPORT</span></div></div>;
- if(slide.visual==="demo")return <div className="visual demo-visual"><div className="demo-bar"><span/><span/><span/> INC-1042 · INVESTIGATING</div><div className="demo-hero"><div className="demo-severity">HIGH SEVERITY</div><strong>Suspicious PowerShell<br/>Execution</strong><small>PS-EXEC-001 · synthetic scenario</small></div><div className="demo-track"><span>AUTH</span><i/><span>PROCESS</span><i/><span>NETWORK</span><i/><span>ANALYSIS</span></div><div className="demo-evidence"><div><small>HOST</small><b>WIN-PC-1042</b></div><div><small>USER</small><b>john.smith</b></div><div><small>DESTINATION</small><b>185.199.110.153</b></div></div></div>;
- if(slide.visual==="trust")return <div className="visual trust-visual"><div className="trust-alert"><span>ANALYST DRAFT</span><b>WIN-PC-1047</b><small>“connected to malicious IP”</small></div><ArrowRight className="visual-arrow"/><div className="trust-evidence"><span>COLLECTED EVIDENCE</span><b>WIN-PC-1042</b><small>CrowdStrike Falcon · high confidence</small><small>Threat intel: suspicious</small></div><div className="trust-controls"><span>USE EVIDENCE VALUE</span><span>KEEP ANALYST VALUE</span><span>REVIEW LATER</span></div><div className="trust-stamp"><Shield size={17}/> HUMAN REVIEW REQUIRED</div></div>;
- if(slide.visual==="impact")return <div className="visual impact-visual"><div className="impact-stat"><small>INVESTIGATION STEPS</small><strong>14</strong><span>PowerShell playbook</span></div><div className="impact-stat"><small>DATA SOURCES</small><strong>6</strong><span>Synthetic adapters</span></div><div className="impact-stat"><small>TESTS PASSING</small><strong>9</strong><span>Engine + API tests</span></div><div className="impact-bottom"><div className="impact-donut"><span>HUMAN<br/>APPROVAL</span></div><p>Recommend<br/>→ Review<br/>→ Approve<br/>→ Execute</p></div></div>;
- return <div className="visual flow-visual"><div className="flow-line"><div className="flow-step"><span>01</span><b>ALERT</b><small>Classify</small></div><i/><div className="flow-step"><span>02</span><b>SOP</b><small>Guide</small></div><i/><div className="flow-step"><span>03</span><b>QUERY</b><small>Search</small></div><i/><div className="flow-step"><span>04</span><b>EVIDENCE</b><small>Normalize</small></div></div><div className="flow-branch"><span>PROVENANCE</span><span>CONFIDENCE</span><span>MISSING DATA</span></div><div className="flow-line lower"><div className="flow-step"><span>05</span><b>TIMELINE</b><small>Correlate</small></div><i/><div className="flow-step"><span>06</span><b>VALIDATE</b><small>Analyst QA</small></div><i/><div className="flow-step"><span>07</span><b>REPORT</b><small>Human review</small></div></div><div className="flow-caption"><Shield size={14}/> WORKFLOW INTELLIGENCE, NOT JUST A CHATBOT</div></div>;
+// ─── Slide types ──────────────────────────────────────────────────────────────
+
+type TitleSlideData    = { id: string; eyebrow: string; title: string; tagline: string; sub: string; note: string };
+type IdentitySlideData = { id: string; eyebrow: string; title: string; note: string; identity: { name: string; problem: string; category: string; tags: string[] } };
+type ImpactSlideData   = { id: string; eyebrow: string; title: string; note: string; impacts: { stat: string; label: string; detail: string }[] };
+type NextSlideData     = { id: string; eyebrow: string; title: string; note: string; nexts: { icon: string; title: string; detail: string }[] };
+
+// ─── Slide 0: Title ───────────────────────────────────────────────────────────
+
+function TitleSlide({ s }: { s: TitleSlideData }) {
+  return (
+    <div className="ns-title">
+      <div className="ns-title-left">
+        <div className="ns-eyebrow">{s.eyebrow}</div>
+        <h1 className="ns-hero">{s.title}</h1>
+        <p className="ns-tagline">{s.tagline}</p>
+        <p className="ns-sub">{s.sub}</p>
+      </div>
+      <div className="ns-title-right">
+        <div className="ns-glyph">
+          <Shield size={80} strokeWidth={1} />
+        </div>
+        <div className="ns-badge-row">
+          {["AI-Powered", "RBAC", "DeepSeek", "OSINT", "Evidence QA"].map(b => (
+            <span key={b} className="ns-badge">{b}</span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Slide 1: Identity ────────────────────────────────────────────────────────
+
+function IdentitySlide({ s }: { s: IdentitySlideData }) {
+  return (
+    <div className="ns-identity">
+      <div className="ns-eyebrow">{s.eyebrow}</div>
+      <h1 className="ns-title-text">{s.title}</h1>
+
+      <div className="ns-identity-grid">
+        {/* Left — name + category */}
+        <div className="ns-id-card">
+          <div className="ns-id-name">{s.identity.name}</div>
+          <div className="ns-id-cat">{s.identity.category}</div>
+          <div className="ns-id-tags">
+            {s.identity.tags.map(t => <span key={t} className="ns-badge">{t}</span>)}
+          </div>
+        </div>
+
+        {/* Right — problem statement */}
+        <div className="ns-id-problem">
+          <div className="ns-problem-label">THE PROBLEM WE SOLVE</div>
+          <p className="ns-problem-text">{s.identity.problem}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Slide 2: Impact ──────────────────────────────────────────────────────────
+
+function ImpactSlide({ s }: { s: ImpactSlideData }) {
+  return (
+    <div className="ns-impact">
+      <div className="ns-eyebrow">{s.eyebrow}</div>
+      <h1 className="ns-title-text">{s.title}</h1>
+      <div className="ns-impact-grid">
+        {s.impacts.map(item => (
+          <div key={item.stat} className="ns-impact-card">
+            <div className="ns-impact-stat">{item.stat}</div>
+            <div className="ns-impact-label">{item.label}</div>
+            <div className="ns-impact-detail">{item.detail}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Slide 3: What's Next ────────────────────────────────────────────────────
+
+function NextSlide({ s }: { s: NextSlideData }) {
+  return (
+    <div className="ns-next">
+      <div className="ns-eyebrow">{s.eyebrow}</div>
+      <h1 className="ns-title-text">{s.title}</h1>
+      <div className="ns-next-grid">
+        {s.nexts.map(item => (
+          <div key={item.title} className="ns-next-card">
+            <span className="ns-next-icon">{item.icon}</span>
+            <b>{item.title}</b>
+            <p>{item.detail}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
